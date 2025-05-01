@@ -94,6 +94,12 @@ export default defineConfig({
           replacement: fileURLToPath(
             new URL('./theme/Appearance.vue', import.meta.url)
           )
+        },
+        {
+          find: /^.*VPLocalSearchBox.vue$/,
+          replacement: fileURLToPath(
+            new URL('./theme/components/Search.vue', import.meta.url)
+          )
         }
       ]
     },

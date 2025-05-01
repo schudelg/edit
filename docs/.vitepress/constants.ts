@@ -16,6 +16,7 @@
 
 import type { DefaultTheme } from 'vitepress'
 import consola from 'consola'
+import { customTokenize, customTokenProcessor } from './search'
 import { transform, transformGuide } from './transformer'
 
 // @unocss-include
@@ -65,44 +66,13 @@ export const search: DefaultTheme.Config['search'] = {
     },
     miniSearch: {
       options: {
-        tokenize: (text) => text.split(/[\n\r #%*,=/:;?[\]{}()&]+/u), // simplified charset: removed [-_.@] and non-english chars (diacritics etc.)
-        processTerm: (term, fieldName) => {
-          // biome-ignore lint/style/noParameterAssign: h
-          term = term
-            .trim()
-            .toLowerCase()
-            .replace(/^\.+/, '')
-            .replace(/\.+$/, '')
-          const stopWords = [
-            'frontmatter',
-            '$frontmatter.synopsis',
-            'and',
-            'about',
-            'but',
-            'now',
-            'the',
-            'with',
-            'you'
-          ]
-          if (term.length < 2 || stopWords.includes(term)) return false
-
-          if (fieldName === 'text') {
-            const parts = term.split('.')
-            if (parts.length > 1) {
-              const newTerms = [term, ...parts]
-                .filter((t) => t.length >= 2)
-                .filter((t) => !stopWords.includes(t))
-              return newTerms
-            }
-          }
-          return term
-        }
+        tokenize: customTokenize,
+        processTerm: customTokenProcessor
       },
       searchOptions: {
-        combineWith: 'AND',
-        fuzzy: true,
         // @ts-ignore
         boostDocument: (documentId, term, storedFields: Record) => {
+          console.log(storedFields.titles)
           const titles = (storedFields?.titles as string[])
             .filter((t) => Boolean(t))
             .map((t) => t.toLowerCase())
@@ -153,7 +123,10 @@ export const nav: DefaultTheme.NavItem[] = [
       { text: '🔖 Bookmarks', link: 'https://github.com/fmhy/bookmarks' },
       { text: '✅ SafeGuard', link: 'https://github.com/fmhy/FMHY-SafeGuard' },
       { text: '📋 snowbin', link: 'https://pastes.fmhy.net' },
-      { text: '®️ Redlib', link: 'https://redlib.fmhy.net/r/FREEMEDIAHECKYEAH/wiki/index' },
+      {
+        text: '®️ Redlib',
+        link: 'https://redlib.fmhy.net/r/FREEMEDIAHECKYEAH/wiki/index'
+      },
       { text: '🔎 SearXNG', link: 'https://searx.fmhy.net/' },
       {
         text: '💡 Site Hunting',
