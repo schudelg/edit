@@ -249,12 +249,12 @@ const searchIndex = computedAsync(async () =>
         fields: ['title', 'titles', 'text'],
         storeFields: ['title', 'titles'],
         searchOptions: {
-          // words of >=8 characters get an allowable edit distance of 1
-          fuzzy: 0.07,
-          // perform prefix search (i.e. "monk" matches "monkfish") only with terms greater than 3 chars
-          prefix: (term) => term.length > 3,
-          // max edit distance of 1 no matter length of an individual term
-          maxFuzzy: 1,
+          // Conditional fuzzy search based on matchExact value
+          fuzzy: matchExact.value ? false : 0.07,
+          // Conditional prefix search based on matchExact value
+          prefix: matchExact.value ? false : (term) => term.length > 3,
+          // Disable max fuzzy if match exact is enabled
+          maxFuzzy: matchExact.value ? 0 : 1,
           boost: { title: 4, text: 2, titles: 1 },
           ...(theme.value.search?.provider === 'local' &&
             theme.value.search.options?.miniSearch?.searchOptions)
@@ -283,9 +283,9 @@ const showDetailedList = useLocalStorage(
     theme.value.search.options?.detailedView === true
 )
 
-const useExactMatch = useLocalStorage(
-  'vitepress:local-search-exact-match',
-  false
+const matchExact = useLocalStorage(
+  'vitepress:local-search-match-exact',
+  false // disabled by default
 )
 
 const disableDetailedView = computed(() => {
@@ -333,13 +333,9 @@ debouncedWatch(
       searchIndex.value,
       filterText.value,
       showDetailedList.value,
-      useExactMatch.value
+      matchExact.value
     ] as const,
-  async (
-    [index, filterTextValue, showDetailedListValue, useExactMatchValue],
-    old,
-    onCleanup
-  ) => {
+  async ([index, filterTextValue, showDetailedListValue], old, onCleanup) => {
     if (old?.[0] !== index) {
       // in case of hmr
       cache.clear()
@@ -353,23 +349,9 @@ debouncedWatch(
     if (!index) return
 
     // Search
-    if (useExactMatchValue && filterTextValue.trim()) {
-      // Perform exact match search
-      results.value = index
-        .search(filterTextValue, {
-          fuzzy: 0, // Disable fuzzy matching
-          prefix: false, // Disable prefix matching
-          combineWith: 'AND', // Require all terms to match
-          ...(theme.value.search?.provider === 'local' &&
-            theme.value.search.options?.miniSearch?.searchOptions)
-        })
-        .slice(0, 16) as (SearchResult & Result)[]
-    } else {
-      // Use default search behavior
-      results.value = index
-        .search(filterTextValue)
-        .slice(0, 16) as (SearchResult & Result)[]
-    }
+    results.value = index
+      .search(filterTextValue)
+      .slice(0, 16) as (SearchResult & Result)[]
     enableNoResults.value = true
 
     // Highlighting
@@ -441,9 +423,8 @@ debouncedWatch(
       })
     })
 
-    const excerpts = Array.from(
-      resultsEl.value?.querySelectorAll('.result .excerpt') ?? []
-    )
+    const excerpts = el.value?.querySelectorAll('.result .excerpt') ?? []
+    // @ts-expect-error
     for (const excerpt of excerpts) {
       excerpt
         .querySelector('mark[data-markjs="true"]')
@@ -555,7 +536,7 @@ const defaultTranslations: { modal: ModalTranslations } = {
     resetButtonTitle: 'Reset search',
     backButtonTitle: 'Close search',
     noResultsText: 'No results for',
-    exactMatchTitle: 'Toggle exact match',
+    exactMatchTitle: 'Match exact phrases',
     footer: {
       selectText: 'to select',
       selectKeyAriaLabel: 'enter',
@@ -699,11 +680,11 @@ function onMouseMove(e: MouseEvent) {
             <button
               class="exact-match-button"
               type="button"
-              :class="{ 'exact-match-active': useExactMatch }"
+              :class="{ 'exact-match-active': matchExact }"
               :title="translate('modal.exactMatchTitle')"
-              @click="useExactMatch = !useExactMatch"
+              @click="matchExact = !matchExact"
             >
-              <span class="vpi-quote local-search-icon" />
+              <span class="vpi-exact-match local-search-icon" />
             </button>
 
             <button
@@ -869,9 +850,16 @@ function onMouseMove(e: MouseEvent) {
   border-color: var(--vp-c-brand-1);
 }
 
-.vpi-quote {
-  --icon: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJsdWNpZGUgbHVjaWRlLWFzdGVyaXNrLWljb24gbHVjaWRlLWFzdGVyaXNrIj48cGF0aCBkPSJNMTIgNnYxMiIvPjxwYXRoIGQ9Ik0xNy4xOTYgOSA2LjgwNCAxNSIvPjxwYXRoIGQ9Im02LjgwNCA5IDEwLjM5MiA2Ii8+PC9zdmc+');
+.vpi-exact-match {
+  --icon: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJsdWNpZGUgbHVjaWRlLXJlZ2V4LWljb24gbHVjaWRlLXJlZ2V4Ij48cGF0aCBkPSJNMTcgM3YxMCIvPjxwYXRoIGQ9Im0xMi42NyA1LjUgOC42NiA1Ii8+PHBhdGggZD0ibTEyLjY3IDEwLjUgOC42Ni01Ii8+PHBhdGggZD0iTTkgMTdhMiAyIDAgMCAwLTItMkg1YTIgMiAwIDAgMC0yIDJ2MmEyIDIgMCAwIDAgMiAyaDJhMiAyIDAgMCAwIDItMnYtMnoiLz48L3N2Zz4=');
 }
+
+.exact-match-button.exact-match-active {
+  color: var(--vp-c-brand-1);
+  background-color: rgba(var(--vp-c-brand-1), 0.1);
+  border-radius: 4px;
+}
+
 .local-search-icon {
   display: block;
   font-size: 18px;
